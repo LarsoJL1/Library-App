@@ -47,8 +47,10 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.TreeSet;
 import java.util.prefs.Preferences;
 
@@ -96,6 +98,7 @@ public class LibraryWindow extends JFrame {
     private final JLabel activeCount = new JLabel("0");
     private final JLabel overdueCount = new JLabel("0");
     private final char[][] gameBoard = new char[3][3];
+    private final Random gameRandom = new Random();
     private final JButton[][] gameCells = new JButton[3][3];
     private final JLabel gameStatusLabel = new JLabel("Your move. Choose a square.");
     private final JLabel gameScoreLabel = new JLabel("You 0   Draws 0   Bot 0");
@@ -107,6 +110,7 @@ public class LibraryWindow extends JFrame {
     private Timer botTimer;
     private static final int TRAP_GRID_SIZE = 11;
     private final boolean[][] trappedCells = new boolean[TRAP_GRID_SIZE][TRAP_GRID_SIZE];
+    private final Random catRandom = new Random();
     private int catRow = TRAP_GRID_SIZE / 2;
     private int catColumn = TRAP_GRID_SIZE / 2;
     private boolean trapGameOver;
@@ -388,7 +392,7 @@ public class LibraryWindow extends JFrame {
     private JPanel buildTicTacToe() {
         JPanel panel = pagePanel();
         panel.add(heading("Tic Tac Toe"));
-        panel.add(label("Take a quick break. You play X; the bot plays O.", MUTED));
+        panel.add(label("Take a quick break. You play X; the easy bot plays O.", MUTED));
 
         JPanel gameInfo = new JPanel(new BorderLayout());
         gameInfo.setOpaque(false);
@@ -454,24 +458,23 @@ public class LibraryWindow extends JFrame {
     }
 
     private void makeBotMove() {
-        int bestScore = Integer.MIN_VALUE;
-        int bestRow = -1;
-        int bestColumn = -1;
+        int[] winningMove = findWinningMove('O');
+        int[] playerThreat = findWinningMove('X');
+        List<int[]> availableMoves = new ArrayList<>();
         for (int row = 0; row < 3; row++) {
             for (int column = 0; column < 3; column++) {
-                if (gameBoard[row][column] == '\0') {
-                    gameBoard[row][column] = 'O';
-                    int score = minimax(false, 0);
-                    gameBoard[row][column] = '\0';
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestRow = row;
-                        bestColumn = column;
-                    }
-                }
+                if (gameBoard[row][column] == '\0') availableMoves.add(new int[]{row, column});
             }
         }
-        if (bestRow >= 0) gameBoard[bestRow][bestColumn] = 'O';
+        int[] move;
+        if (winningMove != null) {
+            move = winningMove;
+        } else if (playerThreat != null && gameRandom.nextDouble() < 0.35) {
+            move = playerThreat;
+        } else {
+            move = availableMoves.get(gameRandom.nextInt(availableMoves.size()));
+        }
+        gameBoard[move[0]][move[1]] = 'O';
         botThinking = false;
         if (!finishGameIfNeeded()) {
             gameStatusLabel.setText("Your move. Choose a square.");
@@ -479,24 +482,18 @@ public class LibraryWindow extends JFrame {
         }
     }
 
-    private int minimax(boolean botTurn, int depth) {
-        if (hasWinner('O')) return 10 - depth;
-        if (hasWinner('X')) return depth - 10;
-        if (isBoardFull()) return 0;
-
-        int bestScore = botTurn ? Integer.MIN_VALUE : Integer.MAX_VALUE;
-        char mark = botTurn ? 'O' : 'X';
+    private int[] findWinningMove(char mark) {
         for (int row = 0; row < 3; row++) {
             for (int column = 0; column < 3; column++) {
                 if (gameBoard[row][column] == '\0') {
                     gameBoard[row][column] = mark;
-                    int score = minimax(!botTurn, depth + 1);
+                    boolean wins = hasWinner(mark);
                     gameBoard[row][column] = '\0';
-                    bestScore = botTurn ? Math.max(bestScore, score) : Math.min(bestScore, score);
+                    if (wins) return new int[]{row, column};
                 }
             }
         }
-        return bestScore;
+        return null;
     }
 
     private boolean finishGameIfNeeded() {
@@ -565,7 +562,7 @@ public class LibraryWindow extends JFrame {
     private JPanel buildTrapTheCat() {
         JPanel panel = pagePanel();
         panel.add(heading("Trap the Cat"));
-        panel.add(label("Click open hexes to block the cat. Keep it away from every edge.", MUTED));
+        panel.add(label("Click open hexes to block the cat. It may make a few imperfect moves.", MUTED));
 
         JPanel info = new JPanel(new BorderLayout());
         info.setOpaque(false);
@@ -618,9 +615,18 @@ public class LibraryWindow extends JFrame {
     }
 
     private int[] findCatNextMove() {
+        List<int[]> legalMoves = new ArrayList<>();
+        for (int[] neighbor : trapNeighbors(catRow, catColumn)) {
+            if (isInsideTrapGrid(neighbor[0], neighbor[1]) && !trappedCells[neighbor[0]][neighbor[1]]) {
+                legalMoves.add(neighbor);
+            }
+        }
+        if (legalMoves.isEmpty()) return null;
+
         int[][] previous = new int[TRAP_GRID_SIZE][TRAP_GRID_SIZE];
         boolean[][] visited = new boolean[TRAP_GRID_SIZE][TRAP_GRID_SIZE];
         java.util.ArrayDeque<Integer> queue = new java.util.ArrayDeque<>();
+        int[] shortestMove = null;
         int start = trapIndex(catRow, catColumn);
         visited[catRow][catColumn] = true;
         previous[catRow][catColumn] = start;
@@ -635,7 +641,8 @@ public class LibraryWindow extends JFrame {
                 while (previous[step / TRAP_GRID_SIZE][step % TRAP_GRID_SIZE] != start) {
                     step = previous[step / TRAP_GRID_SIZE][step % TRAP_GRID_SIZE];
                 }
-                return new int[]{step / TRAP_GRID_SIZE, step % TRAP_GRID_SIZE};
+                shortestMove = new int[]{step / TRAP_GRID_SIZE, step % TRAP_GRID_SIZE};
+                break;
             }
 
             for (int[] neighbor : trapNeighbors(row, column)) {
@@ -647,8 +654,13 @@ public class LibraryWindow extends JFrame {
                 previous[nextRow][nextColumn] = current;
                 queue.addLast(trapIndex(nextRow, nextColumn));
             }
+            if (shortestMove != null) break;
         }
-        return null;
+        if (shortestMove == null) return null;
+        if (catRandom.nextDouble() < 0.55) {
+            return legalMoves.get(catRandom.nextInt(legalMoves.size()));
+        }
+        return shortestMove;
     }
 
     private int[][] trapNeighbors(int row, int column) {

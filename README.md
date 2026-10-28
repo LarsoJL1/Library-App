@@ -42,7 +42,7 @@ git push -u origin main
 
 Use **Settings** in the app header to switch between Light, Dark, Pink, Blue, Green, Yellow, Red, and Orange appearance themes. Your choice is saved for the next launch.
 
-The **Tic Tac Toe** tab includes a quick game against an unbeatable local bot. Your score is kept for the current app session. **Trap the Cat** is a second quick game where you block hexes while the cat searches for an open path to the edge.
+The **Tic Tac Toe** tab includes a quick game against an easy local bot that can miss defensive moves. Your score is kept for the current app session. **Trap the Cat** is a second quick game where you block hexes while the cat sometimes makes imperfect moves toward an open edge, giving you a better chance to trap it.
 
 In the Books tab, **Find series online** looks up an author and subject tags through Open Library and lets you add one catalog row using the series title you entered. A subject may suggest one of the existing categories, which you can change before saving. It does not import volume or edition details.
 
