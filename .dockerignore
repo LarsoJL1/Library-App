@@ -1,0 +1,8 @@
+.git
+.gitignore
+out
+library.db
+library.db-shm
+library.db-wal
+data
+lib/sqlite-jdbc.jar

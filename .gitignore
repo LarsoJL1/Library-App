@@ -1,0 +1,16 @@
+# Build output
+/out/
+*.class
+
+# Local SQLite database and journals
+/library.db
+/library.db-shm
+/library.db-wal
+/data/
+
+# Downloaded local JDBC driver (Docker downloads a pinned copy at build time)
+/lib/sqlite-jdbc.jar
+
+# IDE metadata
+/.idea/
+*.iml
