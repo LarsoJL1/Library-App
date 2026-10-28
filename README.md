@@ -17,6 +17,8 @@ A Java Swing desktop app backed by a SQLite database. A librarian can manage boo
 
 The first run builds `library.db` automatically from `schema.sql` and `seed.sql`. Use **Reset sample data** in the app header to reload the sample data.
 
+Checkout due dates default to 14 days from today and can be changed in the checkout dialog. To extend or shorten an active loan, select it in Circulation and choose **Adjust due date**. Dates cannot be earlier than checkout.
+
 ## Run with Docker
 
 Docker runs the Swing desktop inside a virtual display and serves it in your browser with noVNC. From this folder, run:

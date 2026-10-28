@@ -25,10 +25,17 @@ public class LoanDAO {
 
     // ---------- CREATE (check out a book) ----------
     public void checkout(int memberId, int bookId, int loanDays) throws SQLException {
+        checkout(memberId, bookId, LocalDate.now().plusDays(loanDays));
+    }
+
+    public void checkout(int memberId, int bookId, LocalDate dueDate) throws SQLException {
         if (!isAvailable(bookId)) {
             throw new IllegalStateException("That book is already checked out.");
         }
         LocalDate today = LocalDate.now();
+        if (dueDate.isBefore(today)) {
+            throw new IllegalArgumentException("The due date cannot be before the checkout date.");
+        }
         String sql = "INSERT INTO loan (member_id, book_id, checkout_date, due_date) " +
                      "VALUES (?, ?, ?, ?)";
         try (Connection conn = Database.getConnection();
@@ -36,7 +43,7 @@ public class LoanDAO {
             ps.setInt(1, memberId);
             ps.setInt(2, bookId);
             ps.setString(3, today.toString());
-            ps.setString(4, today.plusDays(loanDays).toString());
+            ps.setString(4, dueDate.toString());
             ps.executeUpdate();
         }
     }
@@ -131,5 +138,16 @@ public class LoanDAO {
             }
         }
         return list;
+    }
+
+    /** Changes the due date of an active loan; returned loans are left unchanged. */
+    public boolean updateDueDate(int loanId, LocalDate dueDate) throws SQLException {
+        String sql = "UPDATE loan SET due_date = ? WHERE loan_id = ? AND return_date IS NULL";
+        try (Connection conn = Database.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, dueDate.toString());
+            ps.setInt(2, loanId);
+            return ps.executeUpdate() > 0;
+        }
     }
 }

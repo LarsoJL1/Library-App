@@ -20,6 +20,7 @@ import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSpinner;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
@@ -29,6 +30,7 @@ import javax.swing.SwingWorker;
 import javax.swing.UIManager;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.SpinnerDateModel;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -39,6 +41,9 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
@@ -343,12 +348,15 @@ public class LibraryWindow extends JFrame {
         checkout.addActionListener(e -> showCheckoutDialog());
         JButton returned = quietButton("Mark returned");
         returned.addActionListener(e -> returnSelectedLoan());
+        JButton dueDate = quietButton("Adjust due date");
+        dueDate.addActionListener(e -> adjustSelectedDueDate());
         JButton fees = quietButton("Overdue fees");
         fees.addActionListener(e -> showOverdueFees());
         JButton counts = quietButton("Loan totals");
         counts.addActionListener(e -> showLoanCounts());
         actions.add(checkout);
         actions.add(returned);
+        actions.add(dueDate);
         actions.add(fees);
         actions.add(counts);
         panel.add(actions);
@@ -998,17 +1006,78 @@ public class LibraryWindow extends JFrame {
                         : "There are no available books to check out.");
                 return;
             }
+            JSpinner dueDate = dateSpinner(LocalDate.now().plusDays(14));
             JPanel form = formPanel();
             addFormRow(form, 0, "Member", member);
             addFormRow(form, 1, "Available book", book);
+            addFormRow(form, 2, "Due date", dueDate);
             int result = JOptionPane.showConfirmDialog(this, form, "Check out a book",
                     JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
             if (result == JOptionPane.OK_OPTION) {
+                dueDate.commitEdit();
+                LocalDate chosenDueDate = spinnerDate(dueDate);
+                if (chosenDueDate.isBefore(LocalDate.now())) {
+                    showWarning("The due date cannot be before today.");
+                    return;
+                }
                 loanDAO.checkout(((MemberChoice) member.getSelectedItem()).member.getMemberId(),
-                        ((BookChoice) book.getSelectedItem()).book.getBookId(), 14);
+                        ((BookChoice) book.getSelectedItem()).book.getBookId(), chosenDueDate);
                 refreshAll();
             }
         });
+    }
+
+    private void adjustSelectedDueDate() {
+        int selectedRow = loansTable.getSelectedRow();
+        if (selectedRow < 0) {
+            showWarning("Select an active loan first.");
+            return;
+        }
+        int row = loansTable.convertRowIndexToModel(selectedRow);
+        int loanId = (int) loansModel.getValueAt(row, 0);
+        String bookTitle = String.valueOf(loansModel.getValueAt(row, 2));
+        LocalDate checkoutDate = (LocalDate) loansModel.getValueAt(row, 3);
+        LocalDate currentDueDate = (LocalDate) loansModel.getValueAt(row, 4);
+        JSpinner dueDate = dateSpinner(currentDueDate);
+        JPanel form = formPanel();
+        addFormRow(form, 0, "Book", label(bookTitle, INK));
+        addFormRow(form, 1, "Checked out", label(checkoutDate.toString(), INK));
+        addFormRow(form, 2, "New due date", dueDate);
+        int result = JOptionPane.showConfirmDialog(this, form, "Adjust due date",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
+
+        perform(() -> {
+            dueDate.commitEdit();
+            LocalDate chosenDueDate = spinnerDate(dueDate);
+            if (chosenDueDate.isBefore(checkoutDate)) {
+                showWarning("The due date cannot be before the checkout date.");
+                return;
+            }
+            if (!loanDAO.updateDueDate(loanId, chosenDueDate)) {
+                showWarning("That loan is no longer active.");
+                return;
+            }
+            refreshLoans();
+        });
+    }
+
+    private JSpinner dateSpinner(LocalDate initialDate) {
+        Date value = Date.from(initialDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
+        JSpinner spinner = new JSpinner(new SpinnerDateModel(value, null, null, Calendar.DAY_OF_MONTH));
+        JSpinner.DateEditor editor = new JSpinner.DateEditor(spinner, "yyyy-MM-dd");
+        editor.getTextField().setBackground(SURFACE);
+        editor.getTextField().setForeground(INK);
+        spinner.setEditor(editor);
+        spinner.setBackground(SURFACE);
+        spinner.setForeground(INK);
+        spinner.setPreferredSize(new Dimension(130, 32));
+        spinner.setFont(BODY);
+        return spinner;
+    }
+
+    private LocalDate spinnerDate(JSpinner spinner) {
+        return ((Date) spinner.getValue()).toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
     }
 
     private void returnSelectedLoan() {
